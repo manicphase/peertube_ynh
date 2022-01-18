@@ -1,3 +1,29 @@
+# PeerTube pour YunoHost
+
+[![Niveau d'intégration](https://dash.yunohost.org/integration/peertube.svg)](https://dash.yunohost.org/appci/app/peertube) ![](https://ci-apps.yunohost.org/ci/badges/peertube.status.svg) ![](https://ci-apps.yunohost.org/ci/badges/peertube.maintain.svg)  
+[![Installer PeerTube avec YunoHost](https://install-app.yunohost.org/install-with-yunohost.svg)](https://install-app.yunohost.org/?app=peertube)
+
+*[Read this readme in english.](./README.md)*
+*[Lire ce readme en français.](./README_fr.md)*
+
+> *Ce package vous permet d'installer PeerTube rapidement et simplement sur un serveur YunoHost.
+Si vous n'avez pas YunoHost, regardez [ici](https://yunohost.org/#/install) pour savoir comment l'installer et en profiter.*
+
+## Vue d'ensemble
+
+Plateforme de streaming vidéo fédérée (ActivityPub) utilisant P2P (BitTorrent) directement dans le navigateur Web, en utilisant <a href="https://github.com/feross/webtorrent"> WebTorrent </a>
+
+
+**Version incluse :** 4.0.0~ynh2
+
+**Démo :** http://peertube.cpy.re
+
+## Captures d'écran
+
+![](./doc/screenshots/screenshot1.png)
+
+## Avertissements / informations importantes
+
 ## Vue d'ensemble
 
 ### Qu'est-ce que PeerTube ?
@@ -38,3 +64,24 @@ En regardant une vidéo, vous aidez l'hébergeur à la diffuser en devenant vous
 
 * L'authentification LDAP est prise en charge, les instructions de configuration sont envoyées à l'adresse email indiquée au moment de l'installation
 * L'authentification HTTP n'est pas prise en charge
+
+## Documentations et ressources
+
+* Site officiel de l'app : https://joinpeertube.org/fr/
+* Documentation officielle de l'admin : https://docs.joinpeertube.org/
+* Dépôt de code officiel de l'app : https://github.com/Chocobozzz/PeerTube/
+* Documentation YunoHost pour cette app : https://yunohost.org/app_peertube
+* Signaler un bug : https://github.com/YunoHost-Apps/peertube_ynh/issues
+
+## Informations pour les développeurs
+
+Merci de faire vos pull request sur la [branche testing](https://github.com/YunoHost-Apps/peertube_ynh/tree/testing).
+
+Pour essayer la branche testing, procédez comme suit.
+```
+sudo yunohost app install https://github.com/YunoHost-Apps/peertube_ynh/tree/testing --debug
+ou
+sudo yunohost app upgrade peertube -u https://github.com/YunoHost-Apps/peertube_ynh/tree/testing --debug
+```
+
+**Plus d'infos sur le packaging d'applications :** https://yunohost.org/packaging_apps
