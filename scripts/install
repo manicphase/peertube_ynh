@@ -126,6 +126,7 @@ ynh_script_progression --message="Setting up source files..."
 ynh_app_setting_set --app=$app --key=final_path --value=$final_path
 # Download, check integrity, uncompress and patch the source from app.src
 ynh_setup_source --dest_dir="$final_path"
+sed -i 's/--pure-lockfile/--pure-lockfile --network-timeout 1000000/g' "$final_path/package.json"
 
 chmod 750 "$final_path"
 chmod -R o-rwx "$final_path"
