@@ -30,6 +30,7 @@ db_pwd=$(ynh_app_setting_get --app=$app --key=psqlpwd)
 datadir=$(ynh_app_setting_get --app=$app --key=datadir)
 admin_mail=$(ynh_user_get_info --username=$admin --key="mail")
 redis_db=$(ynh_app_setting_get --app=$app --key=redis_db)
+secrets_peertube=$(ynh_app_setting_get --app=$app --key=secrets_peertube)
 
 #=================================================
 # CHECK VERSION
@@ -60,7 +61,7 @@ ynh_abort_if_errors
 #=================================================
 ynh_script_progression --message="Stopping a systemd service..."
 
-ynh_systemd_action --service_name=$app --action="stop" --log_path="systemd"
+ynh_systemd_action --service_name=$app --action="stop" --log_path="/var/log/$app/$app.log"
 
 #=================================================
 # ENSURE DOWNWARD COMPATIBILITY
@@ -165,34 +166,9 @@ if [ "$upgrade_type" == "UPGRADE_APP" ]
 then
 	ynh_script_progression --message="Upgrading source files..."
 
-	# Create a temporary directory
-	tmpdir="$(mktemp -d)"
-
-	# Backup the config file in the temp dir
-	cp -af "$final_path/config/production.yaml" "$tmpdir/production.yaml"
-	if [ -s "$final_path/config/local-production.json" ]
-	then
-		cp -af "$final_path/config/local-production.json" "$tmpdir/local-production.json"
-	fi
-
-	# Remove the app directory securely
-	ynh_secure_remove --file="$final_path"
-
 	# Download, check integrity, uncompress and patch the source from app.src
-	ynh_setup_source --dest_dir="$final_path"
-
-	#Copy the admin saved settings from tmp directory to final path
-	cp -af "$tmpdir/production.yaml" "$final_path/config/production.yaml"
-
-	if [ -s "$tmpdir/local-production.json" ]
-	then
-		cp -af "$tmpdir/local-production.json" "$final_path/config/local-production.json"
-	else
-		cp ../conf/local-production.json "$final_path/config/local-production.json"
-	fi
-
-	# Remove the tmp directory securely
-	ynh_secure_remove --file="$tmpdir"
+	ynh_setup_source --full_replace=1 --dest_dir="$final_path" \
+		--keep="config/production.yaml config/local-production.json config/local.yaml"
 fi
 
 chmod 750 "$final_path"
@@ -204,10 +180,10 @@ chown -R $app:www-data "$final_path"
 #=================================================
 ynh_script_progression --message="Upgrading dependencies..."
 
-ynh_install_apps --apps="$ynh_app_dependencies"
-ynh_install_app_dependencies $pkg_dependencies
-ynh_install_nodejs --nodejs_version=$nodejs_version
-ynh_install_extra_app_dependencies --repo="deb https://dl.yarnpkg.com/debian/ stable main" --package="yarn" --key="https://dl.yarnpkg.com/debian/pubkey.gpg"
+ynh_exec_warn_less ynh_install_apps --apps="$app_dependencies"
+ynh_exec_warn_less ynh_install_app_dependencies $pkg_dependencies
+ynh_exec_warn_less ynh_install_nodejs --nodejs_version=$nodejs_version
+ynh_exec_warn_less ynh_install_extra_app_dependencies --repo="deb https://dl.yarnpkg.com/debian/ stable main" --package="yarn" --key="https://dl.yarnpkg.com/debian/pubkey.gpg"
 
 #=================================================
 # NGINX CONFIGURATION
@@ -231,17 +207,14 @@ chmod -R o-rwx "$datadir"
 chown -R $app:www-data "$datadir"
 
 #=================================================
-# UPDATE A CONFIG FILE
+# Generate secrets if they don't exist
 #=================================================
-ynh_script_progression --message="Updating a config file..."
 
-ynh_add_config --template="../conf/production.yaml" --destination="$final_path/config/production.yaml"
-
-chmod 400 "$final_path/config/production.yaml"
-chown $app:$app "$final_path/config/production.yaml"
-
-chmod 600 "$final_path/config/local-production.json"
-chown $app:$app "$final_path/config/local-production.json"
+if [ -z "$secrets_peertube" ]; then
+	ynh_print_info --message="Generating and storing PeerTube secrets..."
+	secrets_peertube=$(ynh_string_random --length=24)
+	ynh_app_setting_set --app=$app --key=secrets_peertube --value=$secrets_peertube
+fi
 
 #=================================================
 # BUILD YARN DEPENDENCIES
@@ -253,6 +226,21 @@ pushd "$final_path"
 	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH yarn install --production --pure-lockfile
 	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH yarn cache clean
 popd
+
+#=================================================
+# UPDATE A CONFIG FILE
+#=================================================
+ynh_script_progression --message="Updating a config file..."
+
+ynh_add_config --template="../conf/production.yaml" --destination="$final_path/config/production.yaml"
+
+chmod 400 "$final_path/config/production.yaml"
+chown $app:$app "$final_path/config/production.yaml"
+
+ynh_backup_if_checksum_is_different --file="$final_path/config/local-production.json"
+
+chmod 600 "$final_path/config/local-production.json"
+chown $app:$app "$final_path/config/local-production.json"
 
 #=================================================
 # SETUP SYSTEMD
@@ -267,8 +255,10 @@ ynh_add_systemd_config
 #=================================================
 ynh_script_progression --message="Starting a systemd service..."
 
+mkdir -p "/var/log/$app"
+chown -R $app:$app "/var/log/$app"
 # Start a systemd service
-ynh_systemd_action --service_name=$app --action="start" --log_path="systemd" --line_match="HTTP server listening on localhost"
+ynh_systemd_action --service_name=$app --action="start" --log_path="/var/log/$app/$app.log" --line_match="HTTP server listening on localhost" --timeout=5400 --length=200
 
 #=================================================
 # INSTALL LDAP PLUGIN
@@ -306,13 +296,14 @@ if ynh_compare_current_package_version --comparison lt --version 4.2.0~ynh1; the
 	popd
 fi
 
+
 #=================================================
 # STOP SYSTEMD SERVICE
 #=================================================
 ynh_script_progression --message="Stopping a systemd service..."
 
 # Stop a systemd service
-ynh_systemd_action --service_name=$app --action="stop" --log_path="systemd"
+ynh_systemd_action --service_name=$app --action="stop" --log_path="/var/log/$app/$app.log"
 
 #=================================================
 # GENERIC FINALIZATION
@@ -336,7 +327,7 @@ yunohost service add $app --description="$app daemon for Peertube" --log="/var/l
 #=================================================
 ynh_script_progression --message="Starting a systemd service..."
 
-ynh_systemd_action --service_name=$app --action="start" --log_path="systemd" --line_match="HTTP server listening on localhost"
+ynh_systemd_action --service_name=$app --action="start" --log_path="/var/log/$app/$app.log" --line_match="HTTP server listening on localhost"
 
 #=================================================
 # RELOAD NGINX
